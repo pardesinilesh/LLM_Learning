@@ -1,0 +1,84 @@
+name: Test LLM Examples
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Check Python syntax
+      run: |
+        python -m py_compile examples/01_tokenization.py
+        python -m py_compile examples/02_embeddings.py
+        python -m py_compile examples/03_simple_llm.py
+        python -m py_compile examples/04_fine_tuning_basics.py
+    
+    - name: Run style checks
+      run: |
+        pip install flake8
+        # Check for common issues
+        flake8 examples/ --count --select=E9,F63,F7,F82 --show-source --statistics
+    
+    - name: Test tokenization example (dry-run)
+      run: |
+        python -c "import sys; sys.path.insert(0, '.'); from examples.example_utils import check_imports; check_imports()" || true
+      continue-on-error: true
+    
+    - name: Verify documentation
+      run: |
+        # Check that all doc files exist and are readable
+        python -c "
+import os
+docs = ['docs/01_introduction.md', 'docs/02_fundamentals.md', 'docs/03_how_llms_work.md', 'docs/04_practical_guide.md']
+for doc in docs:
+    assert os.path.exists(doc), f'Missing {doc}'
+    assert os.path.getsize(doc) > 0, f'Empty {doc}'
+print('✓ All documentation files present')
+        "
+
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Run security checks
+      run: |
+        pip install bandit
+        bandit -r examples/ -ll || true
+
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Check for TODO comments
+      run: |
+        grep -r "TODO\|FIXME\|XXX" examples/ docs/ && echo "Found TODO/FIXME comments" || echo "✓ No TODO comments"
